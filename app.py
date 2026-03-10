@@ -1,69 +1,35 @@
 import streamlit as st
 import pandas as pd
-import requests
-from bs4 import BeautifulSoup
 import plotly.express as px
 
-# Nastavenie stránky
 st.set_page_config(page_title="Rešerš DTA Zmlúv", layout="wide")
 
-@st.cache_data
-def nacitaj_data_mf_sr():
-    url = "https://www.mfsr.sk/sk/dane-cla-uctovnictvo/priame-dane/dane-z-prijmu/zmluvy-zamedzeni-dvojiteho-zdanenia/zmluvy-zamedzeni-dvojiteho-zdanenia/"
-    try:
-        response = requests.get(url, timeout=10)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        table = soup.find('table')
-        rows = table.find_all('tr')
-        
-        data = []
-        for row in rows[1:]:
-            cols = row.find_all('td')
-            if len(cols) >= 2:
-                stat = cols[0].get_text(strip=True)
-                link = cols[1].find('a')['href'] if cols[1].find('a') else ""
-                # Simulácia sadzieb pre demo (v praxi by tu bol AI extraktor)
-                data.append({
-                    "Štát": stat,
-                    "Dividendy (%)": 5 if "A" in stat else 15,
-                    "Licencie (%)": 10 if len(stat) > 7 else 0,
-                    "Zdroj": "https://www.mfsr.sk" + link if not link.startswith('http') else link
-                })
-        return pd.DataFrame(data)
-    except Exception as e:
-        st.error(f"Chyba pri načítaní dát: {e}")
-        return pd.DataFrame()
+# --- STATICKÉ DÁTA (TOTO VŽDY FUNGUJE) ---
+data = [
+    {"Štát": "Rakúsko", "Dividendy (%)": 5, "Licencie (%)": 5, "Zdroj": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/1971/24/"},
+    {"Štát": "Nemecko", "Dividendy (%)": 5, "Licencie (%)": 10, "Zdroj": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/1984/18/"},
+    {"Štát": "Cyprus", "Dividendy (%)": 0, "Licencie (%)": 0, "Zdroj": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/1981/139/"},
+    {"Štát": "Česko", "Dividendy (%)": 5, "Licencie (%)": 10, "Zdroj": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2003/137/"},
+    {"Štát": "Maďarsko", "Dividendy (%)": 5, "Licencie (%)": 0, "Zdroj": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/1996/238/"},
+]
 
-# --- UI APLIKÁCIE ---
-st.title("🔎 Inteligentná rešerš medzinárodných zmlúv")
-st.markdown("Analýza zmlúv o zamedzení dvojitého zdanenia (DTA) zo zdrojov MF SR a Slov-lex.")
+df = pd.DataFrame(data)
 
-df = nacitaj_data_mf_sr()
+# --- UI ---
+st.title("🔎 Moja Rešeršná Appka (Verzia 1.0)")
 
-if not df.empty:
-    # Filtre v hornom paneli
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        st.subheader("Filtre")
-        vybrane_staty = st.multiselect("Vyberte štáty na porovnanie:", df['Štát'].unique())
-        typ_prijmu = st.selectbox("Typ príjmu pre graf:", ["Dividendy (%)", "Licencie (%)"])
+col1, col2 = st.columns([1, 2])
 
-    # Logika filtrovania
-    display_df = df[df['Štát'].isin(vybrane_staty)] if vybrane_staty else df
+with col1:
+    st.subheader("Nastavenia")
+    vyber = st.multiselect("Vyber štáty:", df['Štát'].unique(), default=["Rakúsko", "Nemecko"])
+    parameter = st.radio("Sledovať sadzbu:", ["Dividendy (%)", "Licencie (%)"])
 
-    with col2:
-        st.subheader("Grafické porovnanie")
-        fig = px.bar(display_df, x='Štát', y=typ_prijmu, color='Štát', 
-                     text_auto=True, title=f"Porovnanie sadzieb: {typ_prijmu}")
-        st.plotly_chart(fig, use_container_width=True)
+filtered_df = df[df['Štát'].isin(vyber)]
 
-    # Tabuľka a detail
-    st.divider()
-    st.subheader("Detailný prehľad zmlúv")
-    st.dataframe(display_df[['Štát', 'Dividendy (%)', 'Licencie (%)', 'Zdroj']], use_container_width=True)
+with col2:
+    fig = px.bar(filtered_df, x='Štát', y=parameter, color='Štát', text_auto=True)
+    st.plotly_chart(fig, use_container_width=True)
 
-    if vybrane_staty:
-        st.info(f"💡 Tip: Kliknutím na odkaz v stĺpci 'Zdroj' otvoríte plné znenie zmluvy na Slov-lexe.")
-else:
-    st.warning("Dáta sa nepodarilo načítať. Skontrolujte pripojenie na mfsr.sk.")
+st.divider()
+st.dataframe(filtered_df, use_container_width=True)
